@@ -2,7 +2,7 @@ package com.parking;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
-import java.time.Instant;
+import java.util.Calendar;
 import java.util.List;
 
 public class TestParkingOffice {
@@ -19,11 +19,22 @@ public class TestParkingOffice {
     @Test
     public void testParkingOfficeConstructor() {
         assertNotNull(office);
-        assertTrue(office.toString().contains("City Parking"));
+        assertEquals("City Parking", office.getParkingOfficeName());
+        assertEquals(officeAddress, office.getParkingOfficeAddress());
     }
 
     @Test
-    public void testRegisterCustomer() {
+    public void testGetParkingOfficeName() {
+        assertEquals("City Parking", office.getParkingOfficeName());
+    }
+
+    @Test
+    public void testGetParkingOfficeAddress() {
+        assertEquals(officeAddress, office.getParkingOfficeAddress());
+    }
+
+    @Test
+    public void testRegisterCustomerWithDetails() {
         Address customerAddress = new Address("123 Hello St", "Apt 201", "Boston", "MA", "67890");
         Customer customer = office.register("James McKenna", customerAddress, "000-1234");
 
@@ -31,6 +42,28 @@ public class TestParkingOffice {
         assertEquals("James McKenna", customer.getName());
         assertEquals("000-1234", customer.getPhoneNumber());
         assertTrue(customer.getCustomerId().startsWith("Customer"));
+        assertEquals(1, office.getCustomers().size());
+    }
+
+    @Test
+    public void testRegisterCustomerObject() {
+        Address customerAddress = new Address("456 Oak St", null, "Boston", "MA", "67891");
+        Customer customer = new Customer("CUST001", "Jane Smith", customerAddress, "555-5678");
+
+        office.register(customer);
+
+        assertTrue(office.getCustomers().contains(customer));
+    }
+
+    @Test
+    public void testRegisterCustomerObjectNoDuplicates() {
+        Address customerAddress = new Address("456 Oak St", null, "Boston", "MA", "67891");
+        Customer customer = new Customer("CUST001", "Jane Smith", customerAddress, "555-5678");
+
+        office.register(customer);
+        office.register(customer); // Try to register again
+
+        assertEquals(1, office.getCustomers().size());
     }
 
     @Test
@@ -44,20 +77,37 @@ public class TestParkingOffice {
         assertNotNull(customer1);
         assertNotNull(customer2);
         assertNotEquals(customer1.getCustomerId(), customer2.getCustomerId());
+        assertEquals(2, office.getCustomers().size());
     }
 
     @Test
-    public void testRegisterCar() {
+    public void testRegisterCarReturnsPermit() {
         Address customerAddress = new Address("789 Standing St", null, "Boston", "MA", "62704");
         Customer customer = office.register("Alice Johnson", customerAddress, "000-5555");
+        Car car = customer.register("CAR-A01", CarType.SUV);
 
-        Car car = office.register(customer, "CAR-A01", CarType.SUV);
+        ParkingPermit permit = office.register(car);
 
-        assertNotNull(car);
-        assertEquals("CAR-A01", car.getLicense());
-        assertEquals(CarType.SUV, car.getType());
-        assertEquals(customer.getCustomerId(), car.getOwner());
-        assertEquals(1, customer.getRegisteredCars().size());
+        assertNotNull(permit);
+        assertNotNull(permit.getId());
+        assertEquals(car, permit.getVehicle());
+        assertEquals("CAR-A01", permit.getVehicle().getLicense());
+        assertNotNull(permit.getExpirationDate());
+        assertNotNull(permit.getRegistrationDate());
+    }
+
+    @Test
+    public void testRegisterCarWithCustomExpiration() {
+        Address customerAddress = new Address("789 Standing St", null, "Boston", "MA", "62704");
+        Customer customer = office.register("Alice Johnson", customerAddress, "000-5555");
+        Car car = customer.register("CAR-A01", CarType.SUV);
+
+        Calendar customExpiration = Calendar.getInstance();
+        customExpiration.set(2027, Calendar.DECEMBER, 31);
+
+        ParkingPermit permit = office.register(car, customExpiration);
+
+        assertEquals(customExpiration, permit.getExpirationDate());
     }
 
     @Test
@@ -65,12 +115,85 @@ public class TestParkingOffice {
         Address customerAddress = new Address("321 Maple St", null, "Boston", "MA", "62705");
         Customer customer = office.register("Bob Williams", customerAddress, "000-6666");
 
-        Car car1 = office.register(customer, "CAR-B01", CarType.COMPACT);
-        Car car2 = office.register(customer, "CAR-B02", CarType.SUV);
+        Car car1 = customer.register("CAR-B01", CarType.COMPACT);
+        Car car2 = customer.register("CAR-B02", CarType.SUV);
+
+        ParkingPermit permit1 = office.register(car1);
+        ParkingPermit permit2 = office.register(car2);
 
         assertEquals(2, customer.getRegisteredCars().size());
-        assertTrue(customer.getRegisteredCars().contains(car1));
-        assertTrue(customer.getRegisteredCars().contains(car2));
+        assertNotNull(permit1);
+        assertNotNull(permit2);
+        assertNotEquals(permit1.getId(), permit2.getId());
+    }
+
+    @Test
+    public void testPark() {
+        Address customerAddress = new Address("555 Cedar St", null, "Boston", "MA", "62706");
+        Customer customer = office.register("Charlie Brown", customerAddress, "000-7777");
+        Car car = customer.register("CAR-C01", CarType.COMPACT);
+        ParkingPermit permit = office.register(car);
+
+        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
+        ParkingLot lot = new ParkingLot("Lot-001", lotAddress, 50);
+        office.addLot(lot);
+
+        Calendar parkingDate = Calendar.getInstance();
+        parkingDate.set(2025, Calendar.NOVEMBER, 14);
+
+        ParkingTransaction transaction = office.park(parkingDate, permit, lot);
+
+        assertNotNull(transaction);
+        assertEquals(parkingDate, transaction.getTransactionDate());
+        assertEquals(permit, transaction.getPermit());
+        assertEquals(lot, transaction.getLot());
+        assertNotNull(transaction.getFeeCharged());
+    }
+
+    @Test
+    public void testGetParkingChargesForPermit() {
+        Address customerAddress = new Address("777 Spruce St", null, "Boston", "MA", "62709");
+        Customer customer = office.register("Emma Davis", customerAddress, "000-9999");
+        Car car = customer.register("CAR-D01", CarType.COMPACT);
+        ParkingPermit permit = office.register(car);
+
+        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
+        ParkingLot lot = new ParkingLot("Lot-001", lotAddress, 50);
+        office.addLot(lot);
+
+        Calendar date = Calendar.getInstance();
+        office.park(date, permit, lot);
+        office.park(date, permit, lot);
+        office.park(date, permit, lot);
+
+        Money charges = office.getParkingCharges(permit);
+
+        assertEquals(1500, charges.getCents()); // 3 * $5.00 = $15.00
+    }
+
+    @Test
+    public void testGetParkingChargesForCustomer() {
+        Address customerAddress = new Address("888 Willow St", null, "Boston", "MA", "62711");
+        Customer customer = office.register("Frank Miller", customerAddress, "000-0000");
+
+        Car car1 = customer.register("CAR-E01", CarType.COMPACT);
+        Car car2 = customer.register("CAR-E02", CarType.SUV);
+
+        ParkingPermit permit1 = office.register(car1);
+        ParkingPermit permit2 = office.register(car2);
+
+        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
+        ParkingLot lot = new ParkingLot("Lot-001", lotAddress, 50);
+        office.addLot(lot);
+
+        Calendar date = Calendar.getInstance();
+        office.park(date, permit1, lot); // $5.00
+        office.park(date, permit2, lot); // $8.00
+        office.park(date, permit1, lot); // $5.00
+
+        Money charges = office.getParkingCharges(customer);
+
+        assertEquals(1800, charges.getCents()); // $5 + $8 + $5 = $18.00
     }
 
     @Test
@@ -90,136 +213,6 @@ public class TestParkingOffice {
         Customer found = office.getCustomer("NonexistentCustomer999");
         assertNull(found);
     }
-
-    @Test
-    public void testAddLot() {
-        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
-        ParkingLot lot = new ParkingLot("Lot-001", lotAddress, 50);
-
-        office.addLot(lot);
-
-        String result = office.toString();
-        assertTrue(result.contains("Lots: 1"));
-    }
-
-    @Test
-    public void testAddChargeSingleCharge() {
-        Address customerAddress = new Address("777 Spruce St", null, "Boston", "MA", "62709");
-        Customer customer = office.register("Emma Davis", customerAddress, "000-9999");
-        Car car = office.register(customer, "CAR-C01", CarType.COMPACT);
-
-        String permitId = "Permit-A01";
-        car.setPermit(permitId);
-
-        Money amount = new Money(500);
-        Instant now = Instant.now();
-        ParkingCharge charge = new ParkingCharge(permitId, "Lot-001", now, amount);
-
-        Money total = office.addCharge(charge);
-
-        assertNotNull(total);
-        assertEquals(500, total.getCents());
-    }
-
-    @Test
-    public void testAddChargeMultipleCharges() {
-        Address customerAddress = new Address("888 Willow St", null, "Boston", "MA", "62711");
-        Customer customer = office.register("Frank Miller", customerAddress, "000-0000");
-        Car car = office.register(customer, "CAR-D01", CarType.SUV);
-
-        String permitId = "Permit-B01";
-        car.setPermit(permitId);
-
-        Money amount1 = new Money(500);
-        Instant time1 = Instant.now();
-        ParkingCharge charge1 = new ParkingCharge(permitId, "Lot-002", time1, amount1);
-        Money total1 = office.addCharge(charge1);
-        assertEquals(500, total1.getCents());
-
-        Money amount2 = new Money(1000);
-        Instant time2 = time1.plusSeconds(3600);
-        ParkingCharge charge2 = new ParkingCharge(permitId, "Lot-002", time2, amount2);
-        Money total2 = office.addCharge(charge2);
-        assertEquals(1500, total2.getCents());
-    }
-
-    @Test
-    public void testAddChargeForDifferentCustomers() {
-        Address addr1 = new Address("111 First St", null, "Boston", "MA", "62713");
-        Customer customer1 = office.register("Grace Taylor", addr1, "000-1111");
-        Car car1 = office.register(customer1, "CAR-E01", CarType.COMPACT);
-
-        Address addr2 = new Address("222 Second St", null, "Boston", "MA", "62714");
-        Customer customer2 = office.register("Henry Wilson", addr2, "000-2222");
-        Car car2 = office.register(customer2, "CAR-F01", CarType.SUV);
-
-        String permit1 = "Permit-C01";
-        String permit2 = "Permit-C02";
-        car1.setPermit(permit1);
-        car2.setPermit(permit2);
-
-        Money amount1 = new Money(500);
-        ParkingCharge charge1 = new ParkingCharge(permit1, "Lot-003", Instant.now(), amount1);
-        Money total1 = office.addCharge(charge1);
-        assertEquals(500, total1.getCents());
-
-        Money amount2 = new Money(1000);
-        ParkingCharge charge2 = new ParkingCharge(permit2, "Lot-003", Instant.now(), amount2);
-        Money total2 = office.addCharge(charge2);
-        assertEquals(1000, total2.getCents());
-    }
-
-    @Test
-    public void testAddChargeWithInvalidPermit() {
-        Money amount = new Money(500);
-        Instant now = Instant.now();
-        ParkingCharge charge = new ParkingCharge("Permit-Invalid", "Lot-999", now, amount);
-
-        Money total = office.addCharge(charge);
-
-        assertEquals(500, total.getCents());
-    }
-
-    @Test
-    public void testToStringWithData() {
-        Address customerAddress = new Address("999 Last St", null, "Boston", "MA", "62716");
-        Customer customer = office.register("Iris Anderson", customerAddress, "000-3333");
-        office.register(customer, "CAR-G01", CarType.COMPACT);
-
-        Address lotAddress = new Address("600 Final Ave", null, "Boston", "MA", "62717");
-        ParkingLot lot = new ParkingLot("Lot-004", lotAddress, 25);
-        office.addLot(lot);
-
-        String result = office.toString();
-        assertTrue(result.contains("Customers: 1"));
-        assertTrue(result.contains("Cars: 1"));
-        assertTrue(result.contains("Lots: 1"));
-    }
-
-    @Test
-    public void testAddChargeWithMultipleCarsForSameCustomer() {
-        Address customerAddress = new Address("333 Double St", null, "Boston", "MA", "62718");
-        Customer customer = office.register("Jack Black", customerAddress, "000-4444");
-        Car car1 = office.register(customer, "CAR-H01", CarType.COMPACT);
-        Car car2 = office.register(customer, "CAR-H02", CarType.SUV);
-
-        String permit1 = "Permit-D01";
-        String permit2 = "Permit-D02";
-        car1.setPermit(permit1);
-        car2.setPermit(permit2);
-
-        Money amount1 = new Money(500);
-        ParkingCharge charge1 = new ParkingCharge(permit1, "Lot-005", Instant.now(), amount1);
-        Money total1 = office.addCharge(charge1);
-        assertEquals(500, total1.getCents());
-
-        Money amount2 = new Money(750);
-        ParkingCharge charge2 = new ParkingCharge(permit2, "Lot-005", Instant.now(), amount2);
-        Money total2 = office.addCharge(charge2);
-        assertEquals(1250, total2.getCents());
-    }
-
-    // NEW TESTS FOR PART 1 REQUIREMENTS
 
     @Test
     public void testGetCustomerIds() {
@@ -249,25 +242,56 @@ public class TestParkingOffice {
     }
 
     @Test
+    public void testAddLot() {
+        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
+        ParkingLot lot = new ParkingLot("Lot-001", lotAddress, 50);
+
+        office.addLot(lot);
+
+        assertEquals(1, office.getParkingLots().size());
+        assertTrue(office.getParkingLots().contains(lot));
+    }
+
+    @Test
+    public void testGetPermit() {
+        Address customerAddress = new Address("555 Cedar St", null, "Boston", "MA", "62706");
+        Customer customer = office.register("Charlie Brown", customerAddress, "000-7777");
+        Car car = customer.register("CAR-C01", CarType.COMPACT);
+        ParkingPermit permit = office.register(car);
+
+        ParkingPermit found = office.getPermit(permit.getId());
+
+        assertNotNull(found);
+        assertEquals(permit.getId(), found.getId());
+        assertEquals(permit.getVehicle(), found.getVehicle());
+    }
+
+    @Test
+    public void testGetPermitNotFound() {
+        ParkingPermit found = office.getPermit("NONEXISTENT");
+        assertNull(found);
+    }
+
+    @Test
     public void testGetPermitIds() {
         Address addr = new Address("123 Main St", null, "Boston", "MA", "12345");
         Customer customer = office.register("Test User", addr, "555-5555");
 
-        Car car1 = office.register(customer, "LICENSE-1", CarType.COMPACT);
-        Car car2 = office.register(customer, "LICENSE-2", CarType.SUV);
-        Car car3 = office.register(customer, "LICENSE-3", CarType.COMPACT);
+        Car car1 = customer.register("LICENSE-1", CarType.COMPACT);
+        Car car2 = customer.register("LICENSE-2", CarType.SUV);
+        Car car3 = customer.register("LICENSE-3", CarType.COMPACT);
 
-        car1.setPermit("PERMIT-001");
-        car2.setPermit("PERMIT-002");
-        // car3 has no permit
+        ParkingPermit permit1 = office.register(car1);
+        ParkingPermit permit2 = office.register(car2);
+        ParkingPermit permit3 = office.register(car3);
 
         List<String> permitIds = office.getPermitIds();
 
         assertNotNull(permitIds);
-        assertEquals(2, permitIds.size());
-        assertTrue(permitIds.contains("PERMIT-001"));
-        assertTrue(permitIds.contains("PERMIT-002"));
-        assertFalse(permitIds.contains(null));
+        assertEquals(3, permitIds.size());
+        assertTrue(permitIds.contains(permit1.getId()));
+        assertTrue(permitIds.contains(permit2.getId()));
+        assertTrue(permitIds.contains(permit3.getId()));
     }
 
     @Test
@@ -279,104 +303,133 @@ public class TestParkingOffice {
     }
 
     @Test
-    public void testGetPermitIdsWithNullPermits() {
-        Address addr = new Address("123 Main St", null, "Boston", "MA", "12345");
-        Customer customer = office.register("Test User", addr, "555-5555");
-
-        Car car1 = office.register(customer, "LICENSE-1", CarType.COMPACT);
-        Car car2 = office.register(customer, "LICENSE-2", CarType.SUV);
-
-        // Neither car has a permit
-        List<String> permitIds = office.getPermitIds();
-
-        assertNotNull(permitIds);
-        assertEquals(0, permitIds.size());
-    }
-
-    @Test
-    public void testGetPermitIdsForCustomer() {
+    public void testGetPermitsForCustomer() {
         Address addr1 = new Address("123 First St", null, "Boston", "MA", "12345");
         Address addr2 = new Address("456 Second St", null, "Boston", "MA", "12346");
 
         Customer customer1 = office.register("Alice", addr1, "111-1111");
         Customer customer2 = office.register("Bob", addr2, "222-2222");
 
-        Car car1 = office.register(customer1, "LICENSE-1", CarType.COMPACT);
-        Car car2 = office.register(customer1, "LICENSE-2", CarType.SUV);
-        Car car3 = office.register(customer2, "LICENSE-3", CarType.COMPACT);
+        Car car1 = customer1.register("LICENSE-1", CarType.COMPACT);
+        Car car2 = customer1.register("LICENSE-2", CarType.SUV);
+        Car car3 = customer2.register("LICENSE-3", CarType.COMPACT);
 
-        car1.setPermit("PERMIT-A01");
-        car2.setPermit("PERMIT-A02");
-        car3.setPermit("PERMIT-B01");
+        ParkingPermit permit1 = office.register(car1);
+        ParkingPermit permit2 = office.register(car2);
+        ParkingPermit permit3 = office.register(car3);
 
-        List<String> customer1Permits = office.getPermitIds(customer1);
-        List<String> customer2Permits = office.getPermitIds(customer2);
+        List<ParkingPermit> customer1Permits = office.getPermitsForCustomer(customer1);
+        List<ParkingPermit> customer2Permits = office.getPermitsForCustomer(customer2);
 
         assertNotNull(customer1Permits);
         assertEquals(2, customer1Permits.size());
-        assertTrue(customer1Permits.contains("PERMIT-A01"));
-        assertTrue(customer1Permits.contains("PERMIT-A02"));
-        assertFalse(customer1Permits.contains("PERMIT-B01"));
+        assertTrue(customer1Permits.contains(permit1));
+        assertTrue(customer1Permits.contains(permit2));
+        assertFalse(customer1Permits.contains(permit3));
 
         assertNotNull(customer2Permits);
         assertEquals(1, customer2Permits.size());
-        assertTrue(customer2Permits.contains("PERMIT-B01"));
+        assertTrue(customer2Permits.contains(permit3));
     }
 
     @Test
-    public void testGetPermitIdsForCustomerWithNoPermits() {
+    public void testGetPermitsForCustomerWithNoCars() {
         Address addr = new Address("123 Main St", null, "Boston", "MA", "12345");
         Customer customer = office.register("Test User", addr, "555-5555");
 
-        Car car1 = office.register(customer, "LICENSE-1", CarType.COMPACT);
-        Car car2 = office.register(customer, "LICENSE-2", CarType.SUV);
-
-        // No permits assigned
-        List<String> permitIds = office.getPermitIds(customer);
+        List<ParkingPermit> permitIds = office.getPermitsForCustomer(customer);
 
         assertNotNull(permitIds);
         assertEquals(0, permitIds.size());
     }
 
     @Test
-    public void testGetPermitIdsForCustomerWithNoCars() {
-        Address addr = new Address("123 Main St", null, "Boston", "MA", "12345");
-        Customer customer = office.register("Test User", addr, "555-5555");
+    public void testToStringWithData() {
+        Address customerAddress = new Address("999 Last St", null, "Boston", "MA", "62716");
+        Customer customer = office.register("Iris Anderson", customerAddress, "000-3333");
+        Car car = customer.register("CAR-G01", CarType.COMPACT);
+        office.register(car);
 
-        // No cars registered
-        List<String> permitIds = office.getPermitIds(customer);
+        Address lotAddress = new Address("600 Final Ave", null, "Boston", "MA", "62717");
+        ParkingLot lot = new ParkingLot("Lot-004", lotAddress, 25);
+        office.addLot(lot);
 
-        assertNotNull(permitIds);
-        assertEquals(0, permitIds.size());
+        String result = office.toString();
+        assertTrue(result.contains("City Parking"));
+        assertTrue(result.contains("Customers: 1"));
+        assertTrue(result.contains("Lots: 1"));
     }
 
     @Test
-    public void testGetPermitIdsForNullCustomer() {
-        List<String> permitIds = office.getPermitIds(null);
+    public void testNoParkingChargesForNewCustomer() {
+        Address customerAddress = new Address("123 Test St", null, "Boston", "MA", "12345");
+        Customer customer = office.register("Test User", customerAddress, "555-5555");
 
-        assertNotNull(permitIds);
-        assertEquals(0, permitIds.size());
+        Money charges = office.getParkingCharges(customer);
+
+        assertEquals(0, charges.getCents());
     }
 
     @Test
-    public void testGetPermitIdsForCustomerMixedPermits() {
-        Address addr = new Address("123 Main St", null, "Boston", "MA", "12345");
-        Customer customer = office.register("Test User", addr, "555-5555");
+    public void testNoParkingChargesForNewPermit() {
+        Address customerAddress = new Address("123 Test St", null, "Boston", "MA", "12345");
+        Customer customer = office.register("Test User", customerAddress, "555-5555");
+        Car car = customer.register("TEST123", CarType.COMPACT);
+        ParkingPermit permit = office.register(car);
 
-        Car car1 = office.register(customer, "LICENSE-1", CarType.COMPACT);
-        Car car2 = office.register(customer, "LICENSE-2", CarType.SUV);
-        Car car3 = office.register(customer, "LICENSE-3", CarType.COMPACT);
+        Money charges = office.getParkingCharges(permit);
 
-        car1.setPermit("PERMIT-001");
-        // car2 has no permit
-        car3.setPermit("PERMIT-003");
+        assertEquals(0, charges.getCents());
+    }
 
-        List<String> permitIds = office.getPermitIds(customer);
+    @Test
+    public void testDifferentCarTypeCharges() {
+        Address customerAddress = new Address("333 Double St", null, "Boston", "MA", "62718");
+        Customer customer = office.register("Jack Black", customerAddress, "000-4444");
 
-        assertNotNull(permitIds);
-        assertEquals(2, permitIds.size());
-        assertTrue(permitIds.contains("PERMIT-001"));
-        assertTrue(permitIds.contains("PERMIT-003"));
-        assertFalse(permitIds.contains(null));
+        Car compactCar = customer.register("COMP01", CarType.COMPACT);
+        Car suvCar = customer.register("SUV01", CarType.SUV);
+
+        ParkingPermit compactPermit = office.register(compactCar);
+        ParkingPermit suvPermit = office.register(suvCar);
+
+        Address lotAddress = new Address("200 Park Ave", null, "Boston", "MA", "62708");
+        ParkingLot lot = new ParkingLot("Lot-005", lotAddress, 100);
+        office.addLot(lot);
+
+        Calendar date = Calendar.getInstance();
+        office.park(date, compactPermit, lot);
+        office.park(date, suvPermit, lot);
+
+        Money compactCharges = office.getParkingCharges(compactPermit);
+        Money suvCharges = office.getParkingCharges(suvPermit);
+
+        assertEquals(500, compactCharges.getCents()); // $5.00 for COMPACT
+        assertEquals(800, suvCharges.getCents()); // $8.00 for SUV
+    }
+
+    @Test
+    public void testPermitExpirationIsOneYear() {
+        Address customerAddress = new Address("123 Test St", null, "Boston", "MA", "12345");
+        Customer customer = office.register("Test User", customerAddress, "555-5555");
+        Car car = customer.register("TEST123", CarType.COMPACT);
+
+        Calendar beforeRegistration = Calendar.getInstance();
+        ParkingPermit permit = office.register(car);
+        Calendar afterRegistration = Calendar.getInstance();
+
+        Calendar expectedExpiration = Calendar.getInstance();
+        expectedExpiration.add(Calendar.YEAR, 1);
+
+        Calendar permitExpiration = permit.getExpirationDate();
+
+        // Check that expiration is approximately 1 year from now (within 1 day tolerance)
+        long daysDifference = Math.abs(
+                (permitExpiration.getTimeInMillis() - expectedExpiration.getTimeInMillis())
+                        / (1000 * 60 * 60 * 24)
+        );
+
+        assertTrue(daysDifference <= 1,
+                "Permit expiration should be approximately 1 year from registration");
     }
 }

@@ -1,11 +1,11 @@
 package com.parking;
 
-import java.time.LocalDate;
+import java.util.Calendar;
 import java.util.Objects;
 
 public class Car {
     private String permit;
-    private LocalDate permitExpiration;
+    private Calendar permitExpiration;  // Back to Calendar
     private String license;
     private CarType type;
     private String owner;
@@ -24,11 +24,11 @@ public class Car {
         this.permit = permit;
     }
 
-    public LocalDate getPermitExpiration() {
+    public Calendar getPermitExpiration() {
         return permitExpiration;
     }
 
-    public void setPermitExpiration(LocalDate permitExpiration) {
+    public void setPermitExpiration(Calendar permitExpiration) {
         this.permitExpiration = permitExpiration;
     }
 
@@ -47,7 +47,8 @@ public class Car {
     @Override
     public String toString() {
         String permitInfo = (permit != null) ? permit : "None";
-        String expirationInfo = (permitExpiration != null) ? permitExpiration.toString() : "N/A";
+        String expirationInfo = (permitExpiration != null) ?
+                String.format("%1$tY-%1$tm-%1$td", permitExpiration) : "N/A";
 
         return "Car [License: " + license +
                 ", Type: " + type +

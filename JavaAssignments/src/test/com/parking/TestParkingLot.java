@@ -2,7 +2,7 @@ package com.parking;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
-import java.time.LocalDate;
+import java.util.Calendar;
 
 public class TestParkingLot {
 
@@ -19,11 +19,15 @@ public class TestParkingLot {
 
         car1 = new Car("WEE123", CarType.COMPACT, "James");
         car1.setPermit("P-001");
-        car1.setPermitExpiration(LocalDate.now().plusMonths(6));
+        Calendar expiration1 = Calendar.getInstance();
+        expiration1.add(Calendar.MONTH, 6);
+        car1.setPermitExpiration(expiration1);
 
         car2 = new Car("BEE456", CarType.SUV, "Luna");
         car2.setPermit("P-002");
-        car2.setPermitExpiration(LocalDate.now().plusMonths(3));
+        Calendar expiration2 = Calendar.getInstance();
+        expiration2.add(Calendar.MONTH, 3);
+        car2.setPermitExpiration(expiration2);
     }
 
     @Test
@@ -62,7 +66,9 @@ public class TestParkingLot {
 
         Car car3 = new Car("SEE789", CarType.COMPACT, "Nathan");
         car3.setPermit("P-003");
-        car3.setPermitExpiration(LocalDate.now().plusMonths(1));
+        Calendar expiration3 = Calendar.getInstance();
+        expiration3.add(Calendar.MONTH, 1);
+        car3.setPermitExpiration(expiration3);
 
         // Third car should be rejected (lot is full)
         smallLot.entry(car3);

@@ -1,53 +1,114 @@
 package com.parking;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 public class ParkingOffice {
-    private String name;
-    private Address address;
-    private List<Customer> customers;
-    private List<Car> cars;
-    private List<ParkingLot> lots;
-    private List<ParkingCharge> charges;
+    private String parkingOfficeName;
+    private Address parkingOfficeAddress;
+    private List<Customer> listOfCustomers;
+    private List<ParkingLot> listOfParkingLots;
+    private TransactionManager transactionManager;
+    private PermitManager permitManager;
     private int customerIdCounter;
 
-    public ParkingOffice(String name, Address address) {
-        this.name = name;
-        this.address = address;
-        this.customers = new ArrayList<>();
-        this.cars = new ArrayList<>();
-        this.lots = new ArrayList<>();
-        this.charges = new ArrayList<>();
+    public ParkingOffice(String parkingOfficeName, Address parkingOfficeAddress) {
+        this.parkingOfficeName = parkingOfficeName;
+        this.parkingOfficeAddress = parkingOfficeAddress;
+        this.listOfCustomers = new ArrayList<>();
+        this.listOfParkingLots = new ArrayList<>();
+        this.transactionManager = new TransactionManager();
+        this.permitManager = new PermitManager();
         this.customerIdCounter = 0;
     }
 
     /**
-     * Register a customer to the parking office
+     * Get the parking office name
+     * @return The name of the parking office
+     */
+    public String getParkingOfficeName() {
+        return parkingOfficeName;
+    }
+
+    /**
+     * Get the parking office address
+     * @return The address of the parking office
+     */
+    public Address getParkingOfficeAddress() {
+        return parkingOfficeAddress;
+    }
+
+    /**
+     * Register a new customer to the parking office
      * @param name Customer name
      * @param address Customer address
      * @param phone Customer phone
-     * @return Return new customer object
+     * @return The newly created Customer object
      */
     public Customer register(String name, Address address, String phone) {
         String customerId = "Customer" + customerIdCounter++;
         Customer customer = new Customer(customerId, name, address, phone);
-        customers.add(customer);
+        listOfCustomers.add(customer);
         return customer;
     }
 
     /**
-     * Register a car for an existing customer to the parking office
-     * Use existing customer register method
-     * @param customer Customer who owns the car
-     * @param license Customer's license plate
-     * @param type Customer's type of car, enum
-     * @return Return newly created car object
+     * Register a customer object to the parking office
+     * @param customer The customer to register
      */
-    public Car register(Customer customer, String license, CarType type) {
-        Car car = customer.register(license, type);
-        cars.add(car);
-        return car;
+    public void register(Customer customer) {
+        if (!listOfCustomers.contains(customer)) {
+            listOfCustomers.add(customer);
+        }
+    }
+
+    /**
+     * Register a car and create a parking permit for it
+     * @param car The car to register
+     * @return The newly created ParkingPermit
+     */
+    public ParkingPermit register(Car car) {
+        return permitManager.register(car);
+    }
+
+    /**
+     * Register a car with a specific expiration date
+     * @param car The car to register
+     * @param expirationDate The expiration date for the permit
+     * @return The newly created ParkingPermit
+     */
+    public ParkingPermit register(Car car, Calendar expirationDate) {
+        return permitManager.register(car, expirationDate);
+    }
+
+    /**
+     * Park a car using a permit at a specific lot
+     * @param date The date of parking
+     * @param permit The parking permit
+     * @param lot The parking lot
+     * @return The created ParkingTransaction
+     */
+    public ParkingTransaction park(Calendar date, ParkingPermit permit, ParkingLot lot) {
+        return transactionManager.park(date, permit, lot);
+    }
+
+    /**
+     * Get total parking charges for a specific permit
+     * @param permit The parking permit
+     * @return Total Money amount of charges
+     */
+    public Money getParkingCharges(ParkingPermit permit) {
+        return transactionManager.getParkingCharges(permit);
+    }
+
+    /**
+     * Get total parking charges for a customer
+     * @param customer The customer
+     * @return Total Money amount of charges
+     */
+    public Money getParkingCharges(Customer customer) {
+        return transactionManager.getParkingCharges(customer);
     }
 
     /**
@@ -56,7 +117,7 @@ public class ParkingOffice {
      * @return The Customer object, or null if not found
      */
     public Customer getCustomer(String customerId) {
-        for (Customer customer : customers) {
+        for (Customer customer : listOfCustomers) {
             if (customer.getCustomerId().equals(customerId)) {
                 return customer;
             }
@@ -70,111 +131,18 @@ public class ParkingOffice {
      */
     public List<String> getCustomerIds() {
         List<String> customerIds = new ArrayList<>();
-        for (Customer customer : customers) {
+        for (Customer customer : listOfCustomers) {
             customerIds.add(customer.getCustomerId());
         }
         return customerIds;
     }
 
     /**
-     * Get a collection of all permit IDs across all cars
-     * @return List of permit IDs (excludes null permits)
+     * Get all customers
+     * @return List of all customers
      */
-    public List<String> getPermitIds() {
-        List<String> permitIds = new ArrayList<>();
-        for (Car car : cars) {
-            if (car.getPermit() != null) {
-                permitIds.add(car.getPermit());
-            }
-        }
-        return permitIds;
-    }
-
-    /**
-     * Get a collection of permit IDs for a specific customer
-     * @param customer The customer whose permits to retrieve
-     * @return List of permit IDs for the customer's cars (excludes null permits)
-     */
-    public List<String> getPermitIds(Customer customer) {
-        List<String> permitIds = new ArrayList<>();
-        if (customer == null) {
-            return permitIds;
-        }
-
-        String customerId = customer.getCustomerId();
-        for (Car car : cars) {
-            if (car.getOwner().equals(customerId) && car.getPermit() != null) {
-                permitIds.add(car.getPermit());
-            }
-        }
-        return permitIds;
-    }
-
-    /**
-     * Add a parking charge to the system and update the customer's balance
-     * @param charge The ParkingCharge to add
-     * @return The total amount now owed by the customer (or the charge amount if customer not found)
-     */
-    public Money addCharge(ParkingCharge charge) {
-        charges.add(charge);
-
-        // Find the customer associated with the permit
-        Customer customer = findCustomerByPermitId(charge.getPermitId());
-
-        if (customer != null) {
-            return getTotalChargesForCustomer(customer);
-        }
-
-        // If customer not found, return the charge amount
-        return charge.getAmount();
-    }
-
-    /**
-     * Calculate the total charges owed by a specific customer
-     * @param customer The customer to calculate charges for
-     * @return The total Money amount of all charges for this customer
-     */
-    private Money getTotalChargesForCustomer(Customer customer) {
-        Money total = new Money(0);
-        String customerId = customer.getCustomerId();
-
-        // Sum all charges associated with this customer's cars
-        for (ParkingCharge charge : charges) {
-            // Find the car with this permit
-            for (Car car : cars) {
-                if (car.getPermit() != null &&
-                        car.getPermit().equals(charge.getPermitId()) &&
-                        car.getOwner().equals(customerId)) {
-                    total = total.add(charge.getAmount());
-                    break;
-                }
-            }
-        }
-
-        return total;
-    }
-
-    /**
-     * Find a customer by their car's permit ID
-     * @param permitId The permit ID to search for
-     * @return The Customer who owns the car with this permit, or null if not found
-     */
-    private Customer findCustomerByPermitId(String permitId) {
-        // First, find the car with this permit
-        for (Car car : cars) {
-            if (car.getPermit() != null && car.getPermit().equals(permitId)) {
-                // car.getOwner() returns a String (customerId), not a Customer object
-                String ownerId = car.getOwner();
-
-                // Now find the customer with this customerId
-                for (Customer customer : customers) {
-                    if (customer.getCustomerId().equals(ownerId)) {
-                        return customer;
-                    }
-                }
-            }
-        }
-        return null;
+    public List<Customer> getCustomers() {
+        return new ArrayList<>(listOfCustomers);
     }
 
     /**
@@ -182,7 +150,41 @@ public class ParkingOffice {
      * @param lot The ParkingLot to add
      */
     public void addLot(ParkingLot lot) {
-        lots.add(lot);
+        listOfParkingLots.add(lot);
+    }
+
+    /**
+     * Get all parking lots
+     * @return List of all parking lots
+     */
+    public List<ParkingLot> getParkingLots() {
+        return new ArrayList<>(listOfParkingLots);
+    }
+
+    /**
+     * Get a permit by its ID
+     * @param permitId The permit ID
+     * @return The ParkingPermit, or null if not found
+     */
+    public ParkingPermit getPermit(String permitId) {
+        return permitManager.getPermit(permitId);
+    }
+
+    /**
+     * Get all permit IDs
+     * @return List of all permit IDs
+     */
+    public List<String> getPermitIds() {
+        return permitManager.getAllPermitIds();
+    }
+
+    /**
+     * Get permits for a specific customer
+     * @param customer The customer
+     * @return List of parking permits
+     */
+    public List<ParkingPermit> getPermitsForCustomer(Customer customer) {
+        return permitManager.getPermitsForCustomer(customer);
     }
 
     /**
@@ -191,10 +193,9 @@ public class ParkingOffice {
      */
     @Override
     public String toString() {
-        return "ParkingOffice [Name: " + name +
-                ", Customers: " + customers.size() +
-                ", Cars: " + cars.size() +
-                ", Lots: " + lots.size() +
-                ", Total Charges: " + charges.size() + "]";
+        return "ParkingOffice [Name: " + parkingOfficeName +
+                ", Address: " + parkingOfficeAddress.getCity() +
+                ", Customers: " + listOfCustomers.size() +
+                ", Lots: " + listOfParkingLots.size() + "]";
     }
 }

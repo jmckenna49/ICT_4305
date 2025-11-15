@@ -2,7 +2,7 @@ package com.parking;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
-import java.time.LocalDate;
+import java.util.Calendar;
 
 public class TestCar {
 
@@ -30,7 +30,8 @@ public class TestCar {
 
     @Test
     public void testSetPermitExpiration() {
-        LocalDate expiration = LocalDate.now().plusMonths(6);
+        Calendar expiration = Calendar.getInstance();
+        expiration.add(Calendar.MONTH, 6);
         car.setPermitExpiration(expiration);
         assertEquals(expiration, car.getPermitExpiration());
     }
@@ -48,7 +49,9 @@ public class TestCar {
     @Test
     public void testToStringWithPermit() {
         car.setPermit("123456");
-        car.setPermitExpiration(LocalDate.of(2025, 12, 31));
+        Calendar expiration = Calendar.getInstance();
+        expiration.set(2025, Calendar.DECEMBER, 31);
+        car.setPermitExpiration(expiration);
 
         String result = car.toString();
 
@@ -88,10 +91,13 @@ public class TestCar {
         Car car1 = new Car("WEE123", CarType.COMPACT, "James");
         Car car2 = new Car("WEE123", CarType.COMPACT, "James");
 
+        Calendar expiration = Calendar.getInstance();
+        expiration.set(2025, Calendar.DECEMBER, 31);
+
         car1.setPermit("P-001");
         car2.setPermit("P-001");
-        car1.setPermitExpiration(LocalDate.of(2025, 12, 31));
-        car2.setPermitExpiration(LocalDate.of(2025, 12, 31));
+        car1.setPermitExpiration(expiration);
+        car2.setPermitExpiration(expiration);
 
         assertEquals(car1, car2);
     }
